@@ -3,3 +3,4 @@ src
 .github
 .yarnrc.yml
 tsconfig.json
+vite.config.ts
