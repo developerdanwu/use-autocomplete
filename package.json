@@ -1,7 +1,9 @@
 {
-  "name": "use-autocomplete",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "@developerdanwu/stateful-autocomplete",
+  "version": "0.0.1",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "license": "MIT",
   "packageManager": "yarn@3.5.0",
   "scripts": {
@@ -9,9 +11,11 @@
     "dev": "vitest",
     "lint": "tsc",
     "test": "vitest run",
-    "ci": "yarn lint && yarn test && yarn build"
+    "ci": "yarn lint && yarn test && yarn build",
+    "release": "yarn lint && yarn test && yarn build && changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.26.1",
     "@types/node": "^18.15.11",
     "tsup": "^6.7.0",
     "typescript": "^5.0.4",
