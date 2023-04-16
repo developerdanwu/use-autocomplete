@@ -1,4 +1,5 @@
-import { HTMLAttributes, useState } from "react";
+import { HTMLAttributes, useRef, useState } from "react";
+import useChangeHighlightedIndex from "./hooks/useChangeHighlightedIndex";
 
 const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
   // TODO: types for props
@@ -6,7 +7,7 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
   freeSolo = false,
   options,
   onChange = () => {},
-  value = null,
+  value: valueProp = null,
   inputValue = "",
   open = false,
   disableClearable = false,
@@ -15,7 +16,7 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
   multiple?: boolean;
   freeSolo?: boolean;
   options: TData;
-  onChange?: (event: any, value: any, reason: any) => void;
+  onChange?: (event: any, value: any, reason: any, details: any) => void;
   value?: any;
   inputValue?: string;
   open?: boolean;
@@ -27,7 +28,57 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
     // must exist because it is a required parameter
     states[0]
   );
+  const [valueState, setValueState] = useState(valueProp);
+  const listboxRef = useRef<HTMLUListElement>(null);
   const activeOptions = options[optionsState];
+  const listItemsRef = useRef<HTMLLIElement[]>([]);
+  const itemHighlight = useChangeHighlightedIndex({
+    includeInputInList: false,
+    filteredOptions: activeOptions,
+    listboxRef,
+    listItemsRef,
+  });
+
+  console.log("STATE", valueState);
+
+  // const handleOptionClick = (event) => {
+  //   const index = Number(event.currentTarget.getAttribute('data-option-index'));
+  //   selectNewValue(event, filteredOptions[index], 'selectOption');
+  //
+  //   isTouch.current = false;
+  // };
+
+  const handleValue = (event, newValue, reason, details) => {
+    // if (multiple) {
+    //   if (
+    //     valueSta.length === newValue.length &&
+    //     value.every((val, i) => val === newValue[i])
+    //   ) {
+    //     return;
+    //   }
+    // } else if (value === newValue) {
+    //   return;
+    // }
+
+    if (onChange) {
+      onChange(event, newValue, reason, details);
+    }
+
+    setValueState(newValue);
+  };
+
+  const selectNewValue = (
+    event,
+    option: TData[keyof TData][number],
+    reasonProp = "selectOption",
+    origin = "options"
+  ) => {
+    // TODO: handle multiple
+    // TODO:  Reset Input
+
+    console.log(option);
+    handleValue(event, option, reasonProp, { origin });
+  };
 
   const handleKeyDown =
     (others: {
@@ -37,91 +88,66 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
       if (others?.onKeyDown) {
         others.onKeyDown(event);
       }
-
       switch (event.key) {
         case "ArrowDown":
+          itemHighlight.changeHighlightedIndex({
+            diff: 1,
+            direction: "next",
+            reason: "keyboard",
+            event,
+          });
+          // TODO: handle opening of popper
           console.log("ARROW DOWN");
           break;
+        case "ArrowUp": {
+          // Prevent cursor move
+          event.preventDefault();
+          itemHighlight.changeHighlightedIndex({
+            diff: -1,
+            direction: "previous",
+            reason: "keyboard",
+            event,
+          });
+          // TODO: handle opening of popper
+          break;
+        }
+        case "Enter": {
+          if (itemHighlight.highlightedIndexRef.current !== -1) {
+            const option =
+              activeOptions[itemHighlight.highlightedIndexRef.current];
+            const disabled = false;
+            // Avoid early form validation, let the end-users continue filling the form.
+            event.preventDefault();
+
+            if (disabled) {
+              return;
+            }
+
+            selectNewValue(event, option, "selectOption");
+
+            // Move the selection to the end.
+            // if (autoComplete) {
+            //   inputRef.current.setSelectionRange(
+            //     inputRef.current.value.length,
+            //     inputRef.current.value.length
+            //   );
+            // }
+          }
+          // else if (
+          //   freeSolo &&
+          //   inputValue !== "" &&
+          //   inputValueIsSelectedValue === false
+          // ) {
+          //   if (multiple) {
+          //     // Allow people to add new values before they submit the form.
+          //     event.preventDefault();
+          //   }
+          //   selectNewValue(event, inputValue, "createOption", "freeSolo");
+          // }
+          break;
+        }
         default:
           break;
-        // case "ArrowDown":
-        //   // Prevent cursor move
-        //   event.preventDefault();
-        //   changeHighlightedIndex({
-        //     diff: 1,
-        //     direction: "next",
-        //     reason: "keyboard",
-        //     event,
-        //   });
-        //   handleOpen(event);
-        //
-        //   break;
-        // case "ArrowUp":
-        //   // Prevent cursor move
-        //   event.preventDefault();
-        //   changeHighlightedIndex({
-        //     diff: -1,
-        //     direction: "previous",
-        //     reason: "keyboard",
-        //     event,
-        //   });
-        //   handleOpen(event);
-        //   break;
-        // case "Enter":
-        //   if (highlightedIndexRef.current !== -1 && popupOpen) {
-        //     const option = filteredOptions[highlightedIndexRef.current];
-        //     const disabled = getOptionDisabled
-        //       ? getOptionDisabled(option)
-        //       : false;
-        //
-        //     // Avoid early form validation, let the end-users continue filling the form.
-        //     event.preventDefault();
-        //
-        //     if (disabled) {
-        //       return;
-        //     }
-        //
-        //     selectNewValue(event, option, "selectOption");
-        //
-        //     // Move the selection to the end.
-        //     if (autoComplete) {
-        //       inputRef.current.setSelectionRange(
-        //         inputRef.current.value.length,
-        //         inputRef.current.value.length
-        //       );
-        //     }
-        //   } else if (
-        //     freeSolo &&
-        //     inputValue !== "" &&
-        //     inputValueIsSelectedValue === false
-        //   ) {
-        //     if (multiple) {
-        //       // Allow people to add new values before they submit the form.
-        //       event.preventDefault();
-        //     }
-        //     selectNewValue(event, inputValue, "createOption", "freeSolo");
-        //   }
-        //   break;
-        // case "Escape":
-        //   if (popupOpen) {
-        //     // Avoid Opera to exit fullscreen mode.
-        //     event.preventDefault();
-        //     // Avoid the Modal to handle the event.
-        //     event.stopPropagation();
-        //     handleClose(event, "escape");
-        //   } else if (
-        //     clearOnEscape &&
-        //     (inputValue !== "" || (multiple && value.length > 0))
-        //   ) {
-        //     // Avoid Opera to exit fullscreen mode.
-        //     event.preventDefault();
-        //     // Avoid the Modal to handle the event.
-        //     event.stopPropagation();
-        //     handleClear(event);
-        //   }
-        //   break;
-        // default:
-        //   break;
       }
     };
 
@@ -136,7 +162,7 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
     ),
     states,
     optionsState,
-    getRootProps: (others: any) => ({
+    getRootProps: (others?: any) => ({
       "aria-owns": undefined,
       ...others,
       onKeyDown: handleKeyDown(others),
@@ -176,34 +202,40 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
       // ...(!readOnly && { onDelete: handleTagDelete(index) }),
     }),
     getListboxProps: () => ({
-      // role: 'listbox',
-      // id: `${id}-listbox`,
-      // 'aria-labelledby': `${id}-label`,
-      // ref: handleListboxRef,
-      // onMouseDown: (event) => {
-      //   // Prevent blur
-      //   event.preventDefault();
-      // },
+      role: "listbox",
+      id: `listbox`,
+      "aria-labelledby": `label`,
+      ref: listboxRef,
+      onMouseDown: (event) => {
+        // Prevent blur
+        event.preventDefault();
+      },
     }),
     getOptionProps: ({ index, option }) => {
       // const selected = (multiple ? value : [value]).some(
       //     (value2) => value2 != null && isOptionEqualToValue(option, value2),
       // );
-      // const disabled = getOptionDisabled ? getOptionDisabled(option) : false;
-      //
-      // return {
-      //   key: getOptionLabel(option),
-      //   tabIndex: -1,
-      //   role: 'option',
-      //   id: `${id}-option-${index}`,
-      //   onMouseOver: handleOptionMouseOver,
-      //   onClick: handleOptionClick,
-      //   onTouchStart: handleOptionTouchStart,
-      //   'data-option-index': index,
-      //   'aria-disabled': disabled,
-      //   'aria-selected': selected,
-      // };
+      const disabled = false;
+
+      return {
+        key: `${option}-${index}`,
+        tabIndex: -1,
+        role: "option",
+        id: `-option-${index}`,
+        ref: (el: HTMLLIElement) => {
+          if (el) {
+            listItemsRef.current[index] = el;
+          }
+        },
+        // onMouseOver: handleOptionMouseOver,
+        // onClick: handleOptionClick,
+        // onTouchStart: handleOptionTouchStart,
+        "data-option-index": index,
+        "aria-disabled": disabled,
+        // 'aria-selected': selected,
+      };
     },
+    getHighlightedIndex: () => itemHighlight.highlightedIndexRef.current,
     // id,
     // inputValue,
     // value,
