@@ -4,3 +4,6 @@ src
 .yarnrc.yml
 tsconfig.json
 vite.config.ts
+.eslint.json
+tsconfig.node.json
+.yarn

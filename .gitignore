@@ -1,5 +1,4 @@
 dist
-.idea
 .yarn/*
 !.yarn/cache
 !.yarn/patches
@@ -7,4 +6,36 @@ dist
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+src/dev
 node_modules
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.idea
+
+# Env files
+.env
+#.env.*
+.vercel
+
+# Storybook
+storybook-static
