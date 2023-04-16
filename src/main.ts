@@ -1,23 +1,53 @@
 import { HTMLAttributes, useRef, useState } from "react";
 import useChangeHighlightedIndex from "./hooks/useChangeHighlightedIndex";
+import useControlled from "./hooks/useControlled";
+// TODO: configurable?
+// Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
+const pageSize = 5;
 
-const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
+const useStatefulAutocomplete = <
+  TOptionData,
+  TMultiple extends boolean,
+  TState extends string,
+  // do you need?
+  TValue
+>({
+  defaultValue,
   // TODO: types for props
   multiple = false,
   freeSolo = false,
+  isOptionEqualToValue = (option, value) => option === value,
   options,
-  onChange = () => {},
-  value: valueProp = null,
+  onChange,
+  value: valueProp,
+  onOptionsStateChange,
   inputValue = "",
   open = false,
   disableClearable = false,
   componentName = "Autocomplete",
 }: {
-  multiple?: boolean;
+  isOptionEqualToValue: (option: TOptionData, value: TOptionData) => boolean;
+  defaultValue: { data: TOptionData; stateChange?: TState };
+  multiple?: TMultiple;
   freeSolo?: boolean;
-  options: TData;
-  onChange?: (event: any, value: any, reason: any, details: any) => void;
-  value?: any;
+  // TODO: generics
+  options: Record<TState, { data: TOptionData; stateChange?: TState }[]>;
+  onOptionsStateChange?: (
+    event: any,
+    value: any,
+    reason: any,
+    details: any
+  ) => void;
+  onChange?: (
+    event: any,
+    value: { data: TOptionData; stateChange?: TState },
+    reason: string,
+    details: {
+      origin: string;
+      option: { data: TOptionData; stateChange?: TState };
+    }
+  ) => void;
+  value: { data: TOptionData; stateChange?: TState | undefined };
   inputValue?: string;
   open?: boolean;
   disableClearable?: boolean;
@@ -28,7 +58,12 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
     // must exist because it is a required parameter
     states[0]
   );
-  const [valueState, setValueState] = useState(valueProp);
+
+  const [value, setValueState] = useControlled({
+    controlled: valueProp,
+    default: defaultValue,
+    name: componentName,
+  });
   const listboxRef = useRef<HTMLUListElement>(null);
   const activeOptions = options[optionsState];
   const listItemsRef = useRef<HTMLLIElement[]>([]);
@@ -39,7 +74,7 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
     listItemsRef,
   });
 
-  console.log("STATE", valueState);
+  console.log("STATE", optionsState);
 
   // const handleOptionClick = (event) => {
   //   const index = Number(event.currentTarget.getAttribute('data-option-index'));
@@ -48,7 +83,22 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
   //   isTouch.current = false;
   // };
 
-  const handleValue = (event, newValue, reason, details) => {
+  const handleValue = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+    newValue: { data: TOptionData; stateChange?: TState },
+    reason: string,
+    details: {
+      origin: string;
+      option: { data: TOptionData; stateChange?: TState };
+    }
+  ) => {
+    // don't record value if it's a state change
+    if (details.option?.stateChange) {
+      if (onOptionsStateChange) {
+        onOptionsStateChange(event, newValue, reason, details);
+      }
+      return;
+    }
     // if (multiple) {
     //   if (
     //     valueSta.length === newValue.length &&
@@ -59,25 +109,24 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
     // } else if (value === newValue) {
     //   return;
     // }
-
     if (onChange) {
       onChange(event, newValue, reason, details);
     }
-
     setValueState(newValue);
   };
 
   const selectNewValue = (
-    event,
-    option: TData[keyof TData][number],
+    event: React.KeyboardEvent<HTMLDivElement>,
+    option: (typeof options)[keyof typeof options][number],
     reasonProp = "selectOption",
     origin = "options"
   ) => {
     // TODO: handle multiple
     // TODO:  Reset Input
-
-    console.log(option);
-    handleValue(event, option, reasonProp, { origin });
+    if (option.stateChange) {
+      setOptionsState(option.stateChange);
+    }
+    handleValue(event, option, reasonProp, { origin, option });
   };
 
   const handleKeyDown =
@@ -89,6 +138,28 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
         others.onKeyDown(event);
       }
       switch (event.key) {
+        case "PageUp": {
+          // Prevent scroll of the page
+          event.preventDefault();
+          itemHighlight.changeHighlightedIndex({
+            diff: -pageSize,
+            direction: "previous",
+            reason: "keyboard",
+            event,
+          });
+          break;
+        }
+        case "PageDown": {
+          // Prevent scroll of the page
+          event.preventDefault();
+          itemHighlight.changeHighlightedIndex({
+            diff: pageSize,
+            direction: "next",
+            reason: "keyboard",
+            event,
+          });
+          break;
+        }
         case "ArrowDown":
           itemHighlight.changeHighlightedIndex({
             diff: 1,
@@ -124,27 +195,30 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
             }
 
             selectNewValue(event, option, "selectOption");
-
-            // Move the selection to the end.
-            // if (autoComplete) {
-            //   inputRef.current.setSelectionRange(
-            //     inputRef.current.value.length,
-            //     inputRef.current.value.length
-            //   );
-            // }
           }
-          // else if (
-          //   freeSolo &&
-          //   inputValue !== "" &&
-          //   inputValueIsSelectedValue === false
-          // ) {
-          //   if (multiple) {
-          //     // Allow people to add new values before they submit the form.
-          //     event.preventDefault();
-          //   }
-          //   selectNewValue(event, inputValue, "createOption", "freeSolo");
-          // }
+
           break;
+        }
+        case "Home": {
+          // Prevent scroll of the page
+          event.preventDefault();
+          itemHighlight.changeHighlightedIndex({
+            diff: "start",
+            direction: "next",
+            reason: "keyboard",
+            event,
+          });
+          break;
+        }
+        case "End": {
+          // Prevent scroll of the page
+          event.preventDefault();
+          itemHighlight.changeHighlightedIndex({
+            diff: "end",
+            direction: "next",
+            reason: "keyboard",
+            event,
+          });
         }
         default:
           break;
@@ -211,10 +285,17 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
         event.preventDefault();
       },
     }),
-    getOptionProps: ({ index, option }) => {
-      // const selected = (multiple ? value : [value]).some(
-      //     (value2) => value2 != null && isOptionEqualToValue(option, value2),
-      // );
+    getOptionProps: ({
+      index,
+      option,
+    }: {
+      index: number;
+      option: { data: TOptionData; stateChange?: TState };
+    }) => {
+      const selected = [value].some(
+        (value2) =>
+          value2 != null && isOptionEqualToValue(option.data, value2.data)
+      );
       const disabled = false;
 
       return {
@@ -232,10 +313,9 @@ const useStatefulAutocomplete = <TData extends Record<string, any[]>>({
         // onTouchStart: handleOptionTouchStart,
         "data-option-index": index,
         "aria-disabled": disabled,
-        // 'aria-selected': selected,
+        "aria-selected": selected,
       };
     },
-    getHighlightedIndex: () => itemHighlight.highlightedIndexRef.current,
     // id,
     // inputValue,
     // value,

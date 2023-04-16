@@ -101,7 +101,7 @@ const useChangeHighlightedIndex = ({
       reason = "auto",
     }: {
       event: any;
-      diff: any;
+      diff: "end" | "start" | number | "reset";
       direction: "next" | "previous";
       reason: any;
     }) => {
@@ -112,6 +112,7 @@ const useChangeHighlightedIndex = ({
       const getNextIndex = () => {
         const maxIndex = filteredOptions.length - 1;
 
+        console.log("OPT", filteredOptions, diff);
         if (diff === "reset") {
           return defaultHighlighted;
         }
@@ -126,6 +127,7 @@ const useChangeHighlightedIndex = ({
 
         const newIndex = highlightedIndexRef.current + diff;
 
+        console.log("NEW", newIndex);
         if (newIndex < 0) {
           if (newIndex === -1 && includeInputInList) {
             return -1;
