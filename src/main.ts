@@ -1,6 +1,9 @@
 import React, { HTMLAttributes, useId, useRef, useState } from "react";
 import useChangeHighlightedIndex from "./hooks/useChangeHighlightedIndex";
 import useControlled from "./hooks/useControlled";
+import { Simulate } from "react-dom/test-utils";
+import input = Simulate.input;
+import useHandleInputProps from "./hooks/useHandleInputProps";
 // TODO: configurable?
 // Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
 const pageSize = 5;
@@ -30,16 +33,24 @@ const useStatefulAutocomplete = <
   onHighlightChange,
   multiple = false,
   freeSolo = false,
+  selectOnFocus = !freeSolo,
   isOptionEqualToValue = (option, value) => option === value,
   options,
   onChange,
   value: valueProp,
   onOptionsStateChange,
-  inputValue = "",
+  inputValue: inputValueProp = "",
+  onInputChange,
   open = false,
   disableClearable = false,
   componentName = "Autocomplete",
 }: {
+  onInputChange: (
+    event: React.SyntheticEvent,
+    value: string,
+    reason: string
+  ) => void;
+  selectOnFocus?: boolean;
   onHighlightChange?: (
     event: React.SyntheticEvent,
     option: Option<TOptionData, TState> | null,
@@ -47,7 +58,7 @@ const useStatefulAutocomplete = <
   ) => void;
   id: string;
   isOptionEqualToValue: (option: TOptionData, value: TOptionData) => boolean;
-  defaultValue: Option<TOptionData, TState>;
+  defaultValue: Option<TOptionData, TState> | null;
   multiple?: TMultiple;
   freeSolo?: boolean;
   // TODO: generics
@@ -60,14 +71,14 @@ const useStatefulAutocomplete = <
   ) => void;
   onChange?: (
     event: any,
-    value: { data: TOptionData; stateChange?: TState },
+    value: Option<TOptionData, TState> | null,
     reason: string,
     details: {
       origin: string;
       option: Option<TOptionData, TState>;
     }
   ) => void;
-  value: Option<TOptionData, TState>;
+  value: Option<TOptionData, TState> | null;
   inputValue?: string;
   open?: boolean;
   disableClearable?: boolean;
@@ -81,11 +92,14 @@ const useStatefulAutocomplete = <
     states[0]
   );
 
+  // for options value
   const [value, setValueState] = useControlled({
     controlled: valueProp,
     default: defaultValue,
     name: componentName,
   });
+  const firstFocus = useRef(true);
+  const isTouch = React.useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
   const activeOptions = options[optionsState];
@@ -99,6 +113,13 @@ const useStatefulAutocomplete = <
     listboxRef,
     listItemsRef,
   });
+  const handleInputProps = useHandleInputProps({
+    inputValue: inputValueProp,
+    componentName,
+    onInputChange,
+    disableClearable,
+    multiple,
+  });
 
   // const handleOptionClick = (event) => {
   //   const index = Number(event.currentTarget.getAttribute('data-option-index'));
@@ -108,10 +129,10 @@ const useStatefulAutocomplete = <
   // };
 
   const handleValue = (
-    event: React.UIEvent<Element, UIEvent>,
-    newValue: Option<TOptionData, TState>,
+    event: React.FormEvent<Element>,
+    newValue: Option<TOptionData, TState> | null,
     reason: string,
-    details: {
+    details?: {
       origin: string;
       option: Option<TOptionData, TState>;
       onSelectHandlerValue: any;
@@ -195,6 +216,15 @@ const useStatefulAutocomplete = <
         reason: "mouse",
       });
     }
+  };
+
+  const handleOptionTouchStart = (event: React.UIEvent<Element, UIEvent>) => {
+    itemHighlight.setHighlightedIndex({
+      event,
+      index: Number(event.currentTarget.getAttribute("data-option-index")),
+      reason: "touch",
+    });
+    isTouch.current = true;
   };
 
   const handleKeyDown =
@@ -308,25 +338,46 @@ const useStatefulAutocomplete = <
       "aria-owns": undefined,
       ...others,
       onKeyDown: handleKeyDown(others),
-      // onMouseDown,
-      // onClick,
+      onMouseDown: (event: React.MouseEvent<Element>) => {
+        const target = event.target as HTMLElement;
+        if (target.getAttribute("id") !== id) {
+          event.preventDefault();
+        }
+      },
+      onClick: () => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+        if (
+          inputRef.current &&
+          inputRef.current.selectionEnd &&
+          inputRef.current.selectionStart &&
+          selectOnFocus &&
+          firstFocus.current &&
+          inputRef.current.selectionEnd - inputRef.current.selectionStart === 0
+        ) {
+          inputRef.current.select();
+        }
+
+        firstFocus.current = false;
+      },
     }),
     getInputProps: () => ({
       id,
-      // value,
+      value: handleInputProps.inputValue,
       // onBlur,
       // onFocus,
-      // onChange,
+      onChange: handleInputProps.handleInputChange,
       // onMouseDown,
       // "aria-activedescendant": popupOpen ? "" : null,
       // "aria-autocomplete": autoComplete ? "both" : "list",
       // "aria-controls": listboxAvailable ? `${id}-listbox` : undefined,
       // "aria-expanded": listboxAvailable,
-      // autoComplete: 'off',
+      autoComplete: "off",
       ref: inputRef,
-      // autoCapitalize: 'none',
-      // spellCheck: 'false',
-      // role: 'combobox',
+      autoCapitalize: "none",
+      spellCheck: "false",
+      role: "combobox",
       // disabled: disabledProp,
     }),
     getClearProps: () => ({
@@ -348,7 +399,7 @@ const useStatefulAutocomplete = <
       id: `listbox`,
       "aria-labelledby": `label`,
       ref: listboxRef,
-      onMouseDown: (event) => {
+      onMouseDown: (event: React.MouseEvent<HTMLUListElement>) => {
         // Prevent blur
         event.preventDefault();
       },
@@ -378,7 +429,7 @@ const useStatefulAutocomplete = <
         },
         onMouseOver: handleOptionMouseMove,
         onClick: handleOptionClick(option),
-        // onTouchStart: handleOptionTouchStart,
+        onTouchStart: handleOptionTouchStart,
         "data-option-index": index,
         "aria-disabled": disabled,
         "aria-selected": selected,
