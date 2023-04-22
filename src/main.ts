@@ -1,5 +1,5 @@
 import React, { HTMLAttributes, useId, useRef, useState } from "react";
-import useChangeHighlightedIndex from "./hooks/useChangeHighlightedIndex";
+import useItemHighlight from "./hooks/useItemHighlight";
 import useControlled from "./hooks/useControlled";
 import { Simulate } from "react-dom/test-utils";
 import input = Simulate.input;
@@ -7,9 +7,10 @@ import useHandleInputProps from "./hooks/useHandleInputProps";
 import useAutocompleteState from "./hooks/useAutocompleteState";
 import usePopupState from "./hooks/usePopupState";
 import useAutocompleteOptions from "./hooks/useAutocompleteOptions";
+import useOptionsProps from "./hooks/useOptionsProps";
+import useKeydown from "./hooks/useKeydown";
 // TODO: configurable?
 // Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
-const pageSize = 5;
 
 export type Option<TOptionData, TState extends string> = {
   data: TOptionData;
@@ -92,10 +93,6 @@ const useStatefulAutocomplete = <
   const generatedId = useId();
   const id = idProp ?? generatedId;
   const states = Object.keys(options) as (keyof typeof options)[];
-  // const [optionsState, setOptionsState] = useState<keyof typeof options>(
-  //   // must exist because it is a required parameter
-  //   states[0]
-  // );
   const autocompleteOptions = useAutocompleteOptions({
     options,
   });
@@ -109,9 +106,8 @@ const useStatefulAutocomplete = <
 
   const popupState = usePopupState({ open, componentName });
   const autocompleteState = useAutocompleteState();
-  // const activeOptions = options[autocompleteOptions.optionsState];
   const listboxAvailable = open && autocompleteOptions.activeOptions.length > 0;
-  const itemHighlight = useChangeHighlightedIndex({
+  const itemHighlight = useItemHighlight({
     id,
     onHighlightChange,
     inputRef: autocompleteState.inputRef,
@@ -200,134 +196,19 @@ const useStatefulAutocomplete = <
     });
   };
 
-  const handleOptionClick =
-    (option: Option<TOptionData, TState>) =>
-    (
-      event:
-        | React.MouseEvent<HTMLAnchorElement>
-        | React.MouseEvent<HTMLLIElement>
-    ) => {
-      selectNewValue(event, option, "selectOption");
-      autocompleteState.isTouch.current = false;
-    };
+  const optionsProps = useOptionsProps({
+    highlightedIndexRef: itemHighlight.highlightedIndexRef,
+    setHighlightedIndex: itemHighlight.setHighlightedIndex,
+    isTouchRef: autocompleteState.isTouch,
+    selectNewValue,
+  });
 
-  const handleOptionMouseMove = (event: React.UIEvent<Element, UIEvent>) => {
-    const index = Number(event.currentTarget.getAttribute("data-option-index"));
-    if (itemHighlight.highlightedIndexRef.current !== index) {
-      itemHighlight.setHighlightedIndex({
-        event,
-        index,
-        reason: "mouse",
-      });
-    }
-  };
-
-  const handleOptionTouchStart = (event: React.UIEvent<Element, UIEvent>) => {
-    itemHighlight.setHighlightedIndex({
-      event,
-      index: Number(event.currentTarget.getAttribute("data-option-index")),
-      reason: "touch",
-    });
-    autocompleteState.isTouch.current = true;
-  };
-
-  const handleKeyDown =
-    (others: {
-      onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void;
-    }) =>
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (others?.onKeyDown) {
-        others.onKeyDown(event);
-      }
-      switch (event.key) {
-        case "PageUp": {
-          // Prevent scroll of the page
-          event.preventDefault();
-          itemHighlight.changeHighlightedIndex({
-            diff: -pageSize,
-            direction: "previous",
-            reason: "keyboard",
-            event,
-          });
-          break;
-        }
-        case "PageDown": {
-          // Prevent scroll of the page
-          event.preventDefault();
-          itemHighlight.changeHighlightedIndex({
-            diff: pageSize,
-            direction: "next",
-            reason: "keyboard",
-            event,
-          });
-          break;
-        }
-        case "ArrowDown":
-          itemHighlight.changeHighlightedIndex({
-            diff: 1,
-            direction: "next",
-            reason: "keyboard",
-            event,
-          });
-          // TODO: handle opening of popper
-          console.log("ARROW DOWN");
-          break;
-        case "ArrowUp": {
-          // Prevent cursor move
-          event.preventDefault();
-          itemHighlight.changeHighlightedIndex({
-            diff: -1,
-            direction: "previous",
-            reason: "keyboard",
-            event,
-          });
-          // TODO: handle opening of popper
-          break;
-        }
-        case "Enter": {
-          if (itemHighlight.highlightedIndexRef.current !== -1) {
-            const option =
-              autocompleteOptions.activeOptions[
-                itemHighlight.highlightedIndexRef.current
-              ];
-            const disabled = false;
-            // Avoid early form validation, let the end-users continue filling the form.
-            event.preventDefault();
-
-            if (disabled) {
-              return;
-            }
-
-            selectNewValue(event, option, "selectOption");
-          }
-
-          break;
-        }
-        case "Home": {
-          // Prevent scroll of the page
-          event.preventDefault();
-          itemHighlight.changeHighlightedIndex({
-            diff: "start",
-            direction: "next",
-            reason: "keyboard",
-            event,
-          });
-          break;
-        }
-        case "End": {
-          // Prevent scroll of the page
-          event.preventDefault();
-          itemHighlight.changeHighlightedIndex({
-            diff: "end",
-            direction: "next",
-            reason: "keyboard",
-            event,
-          });
-        }
-        default:
-          break;
-      }
-    };
+  const keydown = useKeydown({
+    activeOptions: autocompleteOptions.activeOptions,
+    highlightedIndexRef: itemHighlight.highlightedIndexRef,
+    changeHighlightedIndex: itemHighlight.changeHighlightedIndex,
+    selectNewValue,
+  });
 
   return {
     activeOptions: autocompleteOptions.activeOptions,
@@ -343,7 +224,7 @@ const useStatefulAutocomplete = <
     getRootProps: (others?: any) => ({
       "aria-owns": undefined,
       ...others,
-      onKeyDown: handleKeyDown(others),
+      onKeyDown: keydown.handleKeyDown(others),
       onMouseDown: (event: React.MouseEvent<Element>) => {
         const target = event.target as HTMLElement;
         if (target.getAttribute("id") !== id) {
@@ -421,9 +302,9 @@ const useStatefulAutocomplete = <
             autocompleteState.listItemsRef.current[index] = el;
           }
         },
-        onMouseOver: handleOptionMouseMove,
-        onClick: handleOptionClick(option),
-        onTouchStart: handleOptionTouchStart,
+        onMouseOver: optionsProps.handleOptionMouseMove,
+        onClick: optionsProps.handleOptionClick(option),
+        onTouchStart: optionsProps.handleOptionTouchStart,
         "data-option-index": index,
         "aria-disabled": disabled,
         "aria-selected": selected,

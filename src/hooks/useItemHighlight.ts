@@ -11,7 +11,7 @@ const CLASSNAMES = {
   },
 };
 
-const useChangeHighlightedIndex = <TOptionData, TState extends string>({
+const useItemHighlight = <TOptionData, TState extends string>({
   //TODO: expose autohighlight
   // autoHighlight = true,
   includeInputInList,
@@ -269,4 +269,4 @@ const useChangeHighlightedIndex = <TOptionData, TState extends string>({
   return { highlightedIndexRef, changeHighlightedIndex, setHighlightedIndex };
 };
 
-export default useChangeHighlightedIndex;
+export default useItemHighlight;
