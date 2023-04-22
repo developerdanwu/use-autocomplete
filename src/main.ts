@@ -1,14 +1,13 @@
-import React, { HTMLAttributes, useId, useRef, useState } from "react";
+import React, { useId } from "react";
 import useItemHighlight from "./hooks/useItemHighlight";
-import useControlled from "./hooks/useControlled";
 import { Simulate } from "react-dom/test-utils";
 import input = Simulate.input;
-import useHandleInputProps from "./hooks/useHandleInputProps";
 import useAutocompleteState from "./hooks/useAutocompleteState";
 import usePopupState from "./hooks/usePopupState";
 import useAutocompleteOptions from "./hooks/useAutocompleteOptions";
-import useOptionsProps from "./hooks/useOptionsProps";
 import useKeydown from "./hooks/useKeydown";
+import useInputProps from "./hooks/props/useInputProps";
+import useOptionsProps from "./hooks/props/useOptionsProps";
 // TODO: configurable?
 // Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
 
@@ -97,15 +96,12 @@ const useStatefulAutocomplete = <
     options,
   });
 
-  // for options value
-  const [value, setValueState] = useControlled({
-    controlled: valueProp,
-    default: defaultValue,
-    name: componentName,
-  });
-
   const popupState = usePopupState({ open, componentName });
-  const autocompleteState = useAutocompleteState();
+  const autocompleteState = useAutocompleteState({
+    valueProp,
+    defaultValue,
+    componentName,
+  });
   const listboxAvailable = open && autocompleteOptions.activeOptions.length > 0;
   const itemHighlight = useItemHighlight({
     id,
@@ -117,7 +113,7 @@ const useStatefulAutocomplete = <
     listItemsRef: autocompleteState.listItemsRef,
   });
 
-  const handleInputProps = useHandleInputProps({
+  const handleInputProps = useInputProps({
     firstFocus: autocompleteState.firstFocus,
     ignoreFocus: autocompleteState.ignoreFocus,
     inputValue: inputValueProp,
@@ -154,8 +150,8 @@ const useStatefulAutocomplete = <
     }
 
     // only runs if uncontrolled
-    if (typeof setValueState === "function") {
-      setValueState(newValue);
+    if (typeof autocompleteState.setValueState === "function") {
+      autocompleteState.setValueState(newValue);
     }
   };
 
@@ -286,7 +282,7 @@ const useStatefulAutocomplete = <
       index: number;
       option: Option<TOptionData, TState>;
     }) => {
-      const selected = [value].some(
+      const selected = [autocompleteState.value].some(
         (value2) =>
           value2 != null && isOptionEqualToValue(option.data, value2.data)
       );
@@ -312,7 +308,7 @@ const useStatefulAutocomplete = <
     },
     id,
     inputValue: handleInputProps.inputValue,
-    value,
+    value: autocompleteState.value,
     // dirty,
     popupOpen: popupState.open,
     // focused,

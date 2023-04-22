@@ -1,7 +1,6 @@
 import React, { MutableRefObject, RefObject } from "react";
-import useControlled from "./useControlled";
-
-const useHandleInputProps = (props: {
+import useControlled from "../useControlled";
+const useInputProps = (props: {
   ignoreFocus: MutableRefObject<boolean>;
   firstFocus: MutableRefObject<boolean>;
   inputValue: string | undefined;
@@ -95,4 +94,4 @@ const useHandleInputProps = (props: {
   };
 };
 
-export default useHandleInputProps;
+export default useInputProps;

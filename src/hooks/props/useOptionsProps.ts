@@ -1,5 +1,5 @@
 import React, { MutableRefObject, RefObject } from "react";
-import { Option } from "../main";
+import { Option } from "../../main";
 
 const useOptionsProps = <TOptionData, TState extends string>(props: {
   highlightedIndexRef: RefObject<number>;
