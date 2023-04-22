@@ -1,7 +1,9 @@
-import React from "react";
+import React, { MutableRefObject, RefObject } from "react";
 import useControlled from "./useControlled";
 
 const useHandleInputProps = (props: {
+  ignoreFocus: MutableRefObject<boolean>;
+  firstFocus: MutableRefObject<boolean>;
   inputValue: string | undefined;
   componentName: string;
   onInputChange: (
@@ -19,27 +21,31 @@ const useHandleInputProps = (props: {
     state: "inputValue",
   });
   const [inputPristine, setInputPristine] = React.useState(true);
+  const [focused, setFocused] = React.useState(false);
 
-  const handleBlur = (event) => {
+  const handleBlur = (
+    event: React.FormEvent<HTMLTextAreaElement | HTMLInputElement>
+  ) => {
     // Ignore the event when using the scrollbar with IE11
 
     setFocused(false);
-    firstFocus.current = true;
-    ignoreFocus.current = false;
 
-    if (autoSelect && highlightedIndexRef.current !== -1 && popupOpen) {
-      selectNewValue(
-        event,
-        filteredOptions[highlightedIndexRef.current],
-        "blur"
-      );
-    } else if (autoSelect && freeSolo && inputValue !== "") {
-      selectNewValue(event, inputValue, "blur", "freeSolo");
-    } else if (clearOnBlur) {
-      resetInputValue(event, value);
-    }
-
-    handleClose(event, "blur");
+    props.firstFocus.current = true;
+    props.ignoreFocus.current = false;
+    //
+    // if (autoSelect && highlightedIndexRef.current !== -1 && popupOpen) {
+    //   selectNewValue(
+    //     event,
+    //     filteredOptions[highlightedIndexRef.current],
+    //     "blur"
+    //   );
+    // } else if (autoSelect && freeSolo && inputValue !== "") {
+    //   selectNewValue(event, inputValue, "blur", "freeSolo");
+    // } else if (clearOnBlur) {
+    //   resetInputValue(event, value);
+    // }
+    //
+    // handleClose(event, "blur");
   };
 
   const handleInputChange = (
@@ -70,7 +76,19 @@ const useHandleInputProps = (props: {
     }
   };
 
+  const handleFocus = (
+    event: React.FormEvent<HTMLTextAreaElement | HTMLInputElement>
+  ) => {
+    setFocused(true);
+
+    // if (openOnFocus && !ignoreFocus.current) {
+    //   handleOpen(event);
+    // }
+  };
+
   return {
+    handleFocus,
+    handleBlur,
     handleInputChange,
     inputValue,
     inputPristine,

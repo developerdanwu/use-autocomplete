@@ -6,8 +6,10 @@ const useAutocompleteState = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
   const listItemsRef = useRef<HTMLLIElement[]>([]);
+  const ignoreFocus = useRef(false);
 
   return {
+    ignoreFocus,
     firstFocus,
     isTouch,
     inputRef,

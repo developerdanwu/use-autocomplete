@@ -5,6 +5,8 @@ import { Simulate } from "react-dom/test-utils";
 import input = Simulate.input;
 import useHandleInputProps from "./hooks/useHandleInputProps";
 import useAutocompleteState from "./hooks/useAutocompleteState";
+import usePopupState from "./hooks/usePopupState";
+import useAutocompleteOptions from "./hooks/useAutocompleteOptions";
 // TODO: configurable?
 // Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
 const pageSize = 5;
@@ -28,6 +30,7 @@ const useStatefulAutocomplete = <
   // do you need?
   TValue
 >({
+  autoComplete,
   id: idProp,
   defaultValue,
   // TODO: types for props
@@ -46,6 +49,7 @@ const useStatefulAutocomplete = <
   disableClearable = false,
   componentName = "Autocomplete",
 }: {
+  autoComplete?: boolean;
   onInputChange: (
     event: React.SyntheticEvent,
     value: string,
@@ -88,10 +92,13 @@ const useStatefulAutocomplete = <
   const generatedId = useId();
   const id = idProp ?? generatedId;
   const states = Object.keys(options) as (keyof typeof options)[];
-  const [optionsState, setOptionsState] = useState<keyof typeof options>(
-    // must exist because it is a required parameter
-    states[0]
-  );
+  // const [optionsState, setOptionsState] = useState<keyof typeof options>(
+  //   // must exist because it is a required parameter
+  //   states[0]
+  // );
+  const autocompleteOptions = useAutocompleteOptions({
+    options,
+  });
 
   // for options value
   const [value, setValueState] = useControlled({
@@ -100,31 +107,29 @@ const useStatefulAutocomplete = <
     name: componentName,
   });
 
+  const popupState = usePopupState({ open, componentName });
   const autocompleteState = useAutocompleteState();
-  const activeOptions = options[optionsState];
+  // const activeOptions = options[autocompleteOptions.optionsState];
+  const listboxAvailable = open && autocompleteOptions.activeOptions.length > 0;
   const itemHighlight = useChangeHighlightedIndex({
     id,
     onHighlightChange,
     inputRef: autocompleteState.inputRef,
     includeInputInList: false,
-    filteredOptions: activeOptions,
+    filteredOptions: autocompleteOptions.activeOptions,
     listboxRef: autocompleteState.listboxRef,
     listItemsRef: autocompleteState.listItemsRef,
   });
+
   const handleInputProps = useHandleInputProps({
+    firstFocus: autocompleteState.firstFocus,
+    ignoreFocus: autocompleteState.ignoreFocus,
     inputValue: inputValueProp,
     componentName,
     onInputChange,
     disableClearable,
     multiple,
   });
-
-  // const handleOptionClick = (event) => {
-  //   const index = Number(event.currentTarget.getAttribute('data-option-index'));
-  //   selectNewValue(event, filteredOptions[index], 'selectOption');
-  //
-  //   autocompleteState.isTouch.current = false;
-  // };
 
   const handleValue = (
     event: React.FormEvent<Element>,
@@ -172,7 +177,7 @@ const useStatefulAutocomplete = <
     if (option.onSelect) {
       onSelectHandlerValue = option.onSelect({
         option,
-        setOptionsState,
+        setOptionsState: autocompleteOptions.setOptionsState,
         resetHighlightIndex: () => {
           itemHighlight.changeHighlightedIndex({
             diff: "start",
@@ -203,6 +208,7 @@ const useStatefulAutocomplete = <
         | React.MouseEvent<HTMLLIElement>
     ) => {
       selectNewValue(event, option, "selectOption");
+      autocompleteState.isTouch.current = false;
     };
 
   const handleOptionMouseMove = (event: React.UIEvent<Element, UIEvent>) => {
@@ -281,7 +287,9 @@ const useStatefulAutocomplete = <
         case "Enter": {
           if (itemHighlight.highlightedIndexRef.current !== -1) {
             const option =
-              activeOptions[itemHighlight.highlightedIndexRef.current];
+              autocompleteOptions.activeOptions[
+                itemHighlight.highlightedIndexRef.current
+              ];
             const disabled = false;
             // Avoid early form validation, let the end-users continue filling the form.
             event.preventDefault();
@@ -322,16 +330,16 @@ const useStatefulAutocomplete = <
     };
 
   return {
-    activeOptions,
+    activeOptions: autocompleteOptions.activeOptions,
     setOptionsState: states.reduce<Record<keyof typeof options, () => void>>(
       (acc, nextVal) => {
-        acc[nextVal] = () => setOptionsState(nextVal);
+        acc[nextVal] = () => autocompleteOptions.setOptionsState(nextVal);
         return acc;
       },
       {} as Record<keyof typeof options, () => void>
     ),
     states,
-    optionsState,
+    optionsState: autocompleteOptions.optionsState,
     getRootProps: (others?: any) => ({
       "aria-owns": undefined,
       ...others,
@@ -365,34 +373,20 @@ const useStatefulAutocomplete = <
     getInputProps: () => ({
       id,
       value: handleInputProps.inputValue,
-      // onBlur,
+      onBlur: handleInputProps.handleBlur,
       // onFocus,
       onChange: handleInputProps.handleInputChange,
       // onMouseDown,
-      // "aria-activedescendant": popupOpen ? "" : null,
-      // "aria-autocomplete": autoComplete ? "both" : "list",
-      // "aria-controls": listboxAvailable ? `${id}-listbox` : undefined,
-      // "aria-expanded": listboxAvailable,
+      "aria-activedescendant": popupState.open ? "" : null,
+      "aria-autocomplete": autoComplete ? "both" : "list",
+      "aria-controls": listboxAvailable ? `${id}-listbox` : undefined,
+      "aria-expanded": listboxAvailable,
       autoComplete: "off",
       ref: autocompleteState.inputRef,
-      autoCapitalize: "none",
-      spellCheck: "false",
-      role: "combobox",
+      autoCapitalize: "none" as const,
+      spellCheck: "false" as const,
+      role: "combobox" as const,
       // disabled: disabledProp,
-    }),
-    getClearProps: () => ({
-      // tabIndex: -1,
-      // onClick: handleClear,
-    }),
-    getPopupIndicatorProps: () => ({
-      // tabIndex: -1,
-      // onClick: handlePopupIndicator,
-    }),
-    getTagProps: ({ index }) => ({
-      // key: index,
-      // 'data-tag-index': index,
-      // tabIndex: -1,
-      // ...(!readOnly && { onDelete: handleTagDelete(index) }),
     }),
     getListboxProps: () => ({
       role: "listbox",
@@ -435,11 +429,11 @@ const useStatefulAutocomplete = <
         "aria-selected": selected,
       };
     },
-    // id,
-    // inputValue,
-    // value,
+    id,
+    inputValue: handleInputProps.inputValue,
+    value,
     // dirty,
-    // popupOpen,
+    popupOpen: popupState.open,
     // focused,
     // anchorEl,
     // setAnchorEl,
