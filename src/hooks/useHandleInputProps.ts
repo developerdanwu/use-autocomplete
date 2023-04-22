@@ -20,6 +20,28 @@ const useHandleInputProps = (props: {
   });
   const [inputPristine, setInputPristine] = React.useState(true);
 
+  const handleBlur = (event) => {
+    // Ignore the event when using the scrollbar with IE11
+
+    setFocused(false);
+    firstFocus.current = true;
+    ignoreFocus.current = false;
+
+    if (autoSelect && highlightedIndexRef.current !== -1 && popupOpen) {
+      selectNewValue(
+        event,
+        filteredOptions[highlightedIndexRef.current],
+        "blur"
+      );
+    } else if (autoSelect && freeSolo && inputValue !== "") {
+      selectNewValue(event, inputValue, "blur", "freeSolo");
+    } else if (clearOnBlur) {
+      resetInputValue(event, value);
+    }
+
+    handleClose(event, "blur");
+  };
+
   const handleInputChange = (
     event: React.FormEvent<HTMLTextAreaElement | HTMLInputElement>
   ) => {

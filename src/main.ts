@@ -4,6 +4,7 @@ import useControlled from "./hooks/useControlled";
 import { Simulate } from "react-dom/test-utils";
 import input = Simulate.input;
 import useHandleInputProps from "./hooks/useHandleInputProps";
+import useAutocompleteState from "./hooks/useAutocompleteState";
 // TODO: configurable?
 // Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
 const pageSize = 5;
@@ -73,7 +74,7 @@ const useStatefulAutocomplete = <
     event: any,
     value: Option<TOptionData, TState> | null,
     reason: string,
-    details: {
+    details?: {
       origin: string;
       option: Option<TOptionData, TState>;
     }
@@ -98,20 +99,17 @@ const useStatefulAutocomplete = <
     default: defaultValue,
     name: componentName,
   });
-  const firstFocus = useRef(true);
-  const isTouch = React.useRef(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listboxRef = useRef<HTMLUListElement>(null);
+
+  const autocompleteState = useAutocompleteState();
   const activeOptions = options[optionsState];
-  const listItemsRef = useRef<HTMLLIElement[]>([]);
   const itemHighlight = useChangeHighlightedIndex({
     id,
     onHighlightChange,
-    inputRef: inputRef,
+    inputRef: autocompleteState.inputRef,
     includeInputInList: false,
     filteredOptions: activeOptions,
-    listboxRef,
-    listItemsRef,
+    listboxRef: autocompleteState.listboxRef,
+    listItemsRef: autocompleteState.listItemsRef,
   });
   const handleInputProps = useHandleInputProps({
     inputValue: inputValueProp,
@@ -125,7 +123,7 @@ const useStatefulAutocomplete = <
   //   const index = Number(event.currentTarget.getAttribute('data-option-index'));
   //   selectNewValue(event, filteredOptions[index], 'selectOption');
   //
-  //   isTouch.current = false;
+  //   autocompleteState.isTouch.current = false;
   // };
 
   const handleValue = (
@@ -224,7 +222,7 @@ const useStatefulAutocomplete = <
       index: Number(event.currentTarget.getAttribute("data-option-index")),
       reason: "touch",
     });
-    isTouch.current = true;
+    autocompleteState.isTouch.current = true;
   };
 
   const handleKeyDown =
@@ -345,21 +343,23 @@ const useStatefulAutocomplete = <
         }
       },
       onClick: () => {
-        if (inputRef.current) {
-          inputRef.current.focus();
+        if (autocompleteState.inputRef.current) {
+          autocompleteState.inputRef.current.focus();
         }
         if (
-          inputRef.current &&
-          inputRef.current.selectionEnd &&
-          inputRef.current.selectionStart &&
+          autocompleteState.inputRef.current &&
+          autocompleteState.inputRef.current.selectionEnd &&
+          autocompleteState.inputRef.current.selectionStart &&
           selectOnFocus &&
-          firstFocus.current &&
-          inputRef.current.selectionEnd - inputRef.current.selectionStart === 0
+          autocompleteState.firstFocus.current &&
+          autocompleteState.inputRef.current.selectionEnd -
+            autocompleteState.inputRef.current.selectionStart ===
+            0
         ) {
-          inputRef.current.select();
+          autocompleteState.inputRef.current.select();
         }
 
-        firstFocus.current = false;
+        autocompleteState.firstFocus.current = false;
       },
     }),
     getInputProps: () => ({
@@ -374,7 +374,7 @@ const useStatefulAutocomplete = <
       // "aria-controls": listboxAvailable ? `${id}-listbox` : undefined,
       // "aria-expanded": listboxAvailable,
       autoComplete: "off",
-      ref: inputRef,
+      ref: autocompleteState.inputRef,
       autoCapitalize: "none",
       spellCheck: "false",
       role: "combobox",
@@ -398,7 +398,7 @@ const useStatefulAutocomplete = <
       role: "listbox",
       id: `listbox`,
       "aria-labelledby": `label`,
-      ref: listboxRef,
+      ref: autocompleteState.listboxRef,
       onMouseDown: (event: React.MouseEvent<HTMLUListElement>) => {
         // Prevent blur
         event.preventDefault();
@@ -424,7 +424,7 @@ const useStatefulAutocomplete = <
         id: `-option-${index}`,
         ref: (el: HTMLLIElement) => {
           if (el) {
-            listItemsRef.current[index] = el;
+            autocompleteState.listItemsRef.current[index] = el;
           }
         },
         onMouseOver: handleOptionMouseMove,
