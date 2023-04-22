@@ -2,7 +2,7 @@ import React from "react";
 import useControlled from "./useControlled";
 
 const useHandleInputProps = (props: {
-  inputValue: string;
+  inputValue: string | undefined;
   componentName: string;
   onInputChange: (
     event: React.SyntheticEvent,

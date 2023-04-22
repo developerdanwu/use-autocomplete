@@ -39,7 +39,7 @@ const useStatefulAutocomplete = <
   onChange,
   value: valueProp,
   onOptionsStateChange,
-  inputValue: inputValueProp = "",
+  inputValue: inputValueProp,
   onInputChange,
   open = false,
   disableClearable = false,
