@@ -1,5 +1,6 @@
 import useEventCallback from "./utils";
-import { useRef, useState } from "react";
+import React, { useRef, useState } from "react";
+import { Option } from "../main";
 
 const classPrefix = "stateful-autocomplete";
 
@@ -10,15 +11,16 @@ const CLASSNAMES = {
   },
 };
 
-const useChangeHighlightedIndex = ({
+const useChangeHighlightedIndex = <TOptionData, TState extends string>({
   //TODO: expose autohighlight
   // autoHighlight = true,
   includeInputInList,
   // disableListWrap,
   // autocomplete,
-  // inputRef,
+  inputRef,
+  id,
+  onHighlightChange,
   // inputValue,
-  // setHighlightedIndex,
   // popupOpen,
   filteredOptions,
   listboxRef,
@@ -26,29 +28,26 @@ const useChangeHighlightedIndex = ({
 }: // disabledItemsFocusable,
 // getOptionLabel,
 {
+  id: string;
   listItemsRef: React.RefObject<HTMLLIElement[]>;
   // autoHighlight?: boolean;
   // disabledItemsFocusable: boolean;
   listboxRef: React.RefObject<HTMLUListElement>;
   // popupOpen: boolean;
   // TODO: types
-  // setHighlightedIndex: ({
-  //   index,
-  //   reason,
-  //   event,
-  // }: {
-  //   index: number;
-  //   reason: any;
-  //   event: any;
-  // }) => void;
   // TODO: types
   filteredOptions: any;
   // getOptionLabel: (option: string) => string;
   // inputValue: any;
-  // inputRef: React.MutableRefObject<HTMLInputElement>;
+  inputRef: React.RefObject<HTMLInputElement>;
   // defaultHighlighted: 0 | -1;
   // autocomplete: boolean;
   // disableListWrap: boolean;
+  onHighlightChange?: (
+    event: React.SyntheticEvent,
+    option: Option<TOptionData, TState> | null,
+    reason: any
+  ) => void;
   includeInputInList: boolean;
 }) => {
   const disabledItemsFocusable = false;
@@ -56,6 +55,74 @@ const useChangeHighlightedIndex = ({
   const defaultHighlighted = /*autoHighlight ? 0 : -1*/ 0;
   const highlightedIndexRef = useRef<number>(defaultHighlighted);
   const popupOpen = true;
+
+  const setHighlightedIndex = useEventCallback(
+    ({ event, index, reason = "auto" }) => {
+      highlightedIndexRef.current = index;
+
+      // does the index exist?
+      if (inputRef.current) {
+        if (index === -1) {
+          inputRef.current.removeAttribute("aria-activedescendant");
+        } else {
+          inputRef.current.setAttribute(
+            "aria-activedescendant",
+            `${id}-option-${index}`
+          );
+        }
+      }
+
+      if (onHighlightChange) {
+        onHighlightChange(
+          event,
+          index === -1 ? null : filteredOptions[index],
+          reason
+        );
+      }
+
+      if (!listboxRef.current) {
+        return;
+      }
+
+      const prev = listboxRef.current.querySelector(
+        `[role="option"].${CLASSNAMES.option.focused}`
+      );
+      if (prev) {
+        prev.classList.remove(CLASSNAMES.option.focused);
+        prev.classList.remove(CLASSNAMES.option.focusVisible);
+      }
+
+      const listboxNode = listboxRef.current;
+
+      // "No results"
+      if (!listboxNode) {
+        return;
+      }
+
+      if (index === -1) {
+        listboxNode.scrollTop = 0;
+        return;
+      }
+
+      const option = listboxRef.current.querySelector(
+        `[data-option-index="${index}"]`
+      );
+
+      if (!option) {
+        return;
+      }
+
+      option.classList.add(CLASSNAMES.option.focused);
+      if (reason === "keyboard") {
+        option.classList.add(CLASSNAMES.option.focusVisible);
+      }
+
+      if (reason !== "mouse") {
+        listboxNode.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    }
+  );
+
   function validOptionIndex(index: number, direction: "next" | "previous") {
     if (!listboxRef.current || index === -1) {
       return -1;
@@ -174,9 +241,8 @@ const useChangeHighlightedIndex = ({
           listItems[nextIndex].classList.add(CLASSNAMES.option.focusVisible);
         }
       }
-      highlightedIndexRef.current = nextIndex;
 
-      // setHighlightedIndex({ index: nextIndex, reason, event });
+      setHighlightedIndex({ index: nextIndex, reason, event });
 
       // Sync the content of the input with the highlighted option.
       // if (autocomplete && diff !== "reset") {
@@ -200,7 +266,7 @@ const useChangeHighlightedIndex = ({
     }
   );
 
-  return { highlightedIndexRef, changeHighlightedIndex };
+  return { highlightedIndexRef, changeHighlightedIndex, setHighlightedIndex };
 };
 
 export default useChangeHighlightedIndex;

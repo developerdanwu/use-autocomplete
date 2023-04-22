@@ -51,7 +51,7 @@ export default function useControlled<TValue>({
     }, [JSON.stringify(defaultProp)]);
   }
 
-  const setValueIfUncontrolled = React.useCallback((newValue) => {
+  const setValueIfUncontrolled = React.useCallback((newValue: TValue) => {
     if (!isControlled) {
       setValue(newValue);
     }

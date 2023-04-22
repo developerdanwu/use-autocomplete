@@ -1,9 +1,21 @@
-import { HTMLAttributes, useRef, useState } from "react";
+import React, { HTMLAttributes, useId, useRef, useState } from "react";
 import useChangeHighlightedIndex from "./hooks/useChangeHighlightedIndex";
 import useControlled from "./hooks/useControlled";
 // TODO: configurable?
 // Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
 const pageSize = 5;
+
+export type Option<TOptionData, TState extends string> = {
+  data: TOptionData;
+  onSelect?: (options: {
+    option: Option<TOptionData, TState>;
+    // TODO: types for state change
+    setOptionsState: React.Dispatch<React.SetStateAction<TState>>;
+    resetHighlightIndex: () => void;
+    // return true then onChange will also be run
+    // TODO: better typing for this
+  }) => any;
+};
 
 const useStatefulAutocomplete = <
   TOptionData,
@@ -12,8 +24,10 @@ const useStatefulAutocomplete = <
   // do you need?
   TValue
 >({
+  id: idProp,
   defaultValue,
   // TODO: types for props
+  onHighlightChange,
   multiple = false,
   freeSolo = false,
   isOptionEqualToValue = (option, value) => option === value,
@@ -26,12 +40,18 @@ const useStatefulAutocomplete = <
   disableClearable = false,
   componentName = "Autocomplete",
 }: {
+  onHighlightChange?: (
+    event: React.SyntheticEvent,
+    option: Option<TOptionData, TState> | null,
+    reason: any
+  ) => void;
+  id: string;
   isOptionEqualToValue: (option: TOptionData, value: TOptionData) => boolean;
-  defaultValue: { data: TOptionData; stateChange?: TState };
+  defaultValue: Option<TOptionData, TState>;
   multiple?: TMultiple;
   freeSolo?: boolean;
   // TODO: generics
-  options: Record<TState, { data: TOptionData; stateChange?: TState }[]>;
+  options: Record<TState, Option<TOptionData, TState>[]>;
   onOptionsStateChange?: (
     event: any,
     value: any,
@@ -44,15 +64,17 @@ const useStatefulAutocomplete = <
     reason: string,
     details: {
       origin: string;
-      option: { data: TOptionData; stateChange?: TState };
+      option: Option<TOptionData, TState>;
     }
   ) => void;
-  value: { data: TOptionData; stateChange?: TState | undefined };
+  value: Option<TOptionData, TState>;
   inputValue?: string;
   open?: boolean;
   disableClearable?: boolean;
   componentName?: string;
 }) => {
+  const generatedId = useId();
+  const id = idProp ?? generatedId;
   const states = Object.keys(options) as (keyof typeof options)[];
   const [optionsState, setOptionsState] = useState<keyof typeof options>(
     // must exist because it is a required parameter
@@ -64,17 +86,19 @@ const useStatefulAutocomplete = <
     default: defaultValue,
     name: componentName,
   });
+  const inputRef = useRef<HTMLInputElement>(null);
   const listboxRef = useRef<HTMLUListElement>(null);
   const activeOptions = options[optionsState];
   const listItemsRef = useRef<HTMLLIElement[]>([]);
   const itemHighlight = useChangeHighlightedIndex({
+    id,
+    onHighlightChange,
+    inputRef: inputRef,
     includeInputInList: false,
     filteredOptions: activeOptions,
     listboxRef,
     listItemsRef,
   });
-
-  console.log("STATE", optionsState);
 
   // const handleOptionClick = (event) => {
   //   const index = Number(event.currentTarget.getAttribute('data-option-index'));
@@ -84,21 +108,15 @@ const useStatefulAutocomplete = <
   // };
 
   const handleValue = (
-    event: React.KeyboardEvent<HTMLDivElement>,
-    newValue: { data: TOptionData; stateChange?: TState },
+    event: React.UIEvent<Element, UIEvent>,
+    newValue: Option<TOptionData, TState>,
     reason: string,
     details: {
       origin: string;
-      option: { data: TOptionData; stateChange?: TState };
+      option: Option<TOptionData, TState>;
+      onSelectHandlerValue: any;
     }
   ) => {
-    // don't record value if it's a state change
-    if (details.option?.stateChange) {
-      if (onOptionsStateChange) {
-        onOptionsStateChange(event, newValue, reason, details);
-      }
-      return;
-    }
     // if (multiple) {
     //   if (
     //     valueSta.length === newValue.length &&
@@ -109,24 +127,74 @@ const useStatefulAutocomplete = <
     // } else if (value === newValue) {
     //   return;
     // }
+
+    // runs if onChange provided
     if (onChange) {
       onChange(event, newValue, reason, details);
     }
-    setValueState(newValue);
+
+    // only runs if uncontrolled
+    if (typeof setValueState === "function") {
+      setValueState(newValue);
+    }
   };
 
   const selectNewValue = (
-    event: React.KeyboardEvent<HTMLDivElement>,
+    event: React.UIEvent<Element, UIEvent>,
     option: (typeof options)[keyof typeof options][number],
     reasonProp = "selectOption",
     origin = "options"
   ) => {
     // TODO: handle multiple
     // TODO:  Reset Input
-    if (option.stateChange) {
-      setOptionsState(option.stateChange);
+
+    // different onSelect side effects that can be run for different options
+    let onSelectHandlerValue;
+    if (option.onSelect) {
+      onSelectHandlerValue = option.onSelect({
+        option,
+        setOptionsState,
+        resetHighlightIndex: () => {
+          itemHighlight.changeHighlightedIndex({
+            diff: "start",
+            direction: "previous",
+            reason: "keyboard",
+            event,
+          });
+        },
+      });
+
+      // if undefined is returned then don't run handleValue
+      if (onSelectHandlerValue === undefined) {
+        return;
+      }
     }
-    handleValue(event, option, reasonProp, { origin, option });
+    handleValue(event, option, reasonProp, {
+      origin,
+      option,
+      onSelectHandlerValue,
+    });
+  };
+
+  const handleOptionClick =
+    (option: Option<TOptionData, TState>) =>
+    (
+      event:
+        | React.MouseEvent<HTMLAnchorElement>
+        | React.MouseEvent<HTMLLIElement>
+    ) => {
+      selectNewValue(event, option, "selectOption");
+    };
+
+  const handleOptionMouseMove = (event: React.UIEvent<Element, UIEvent>) => {
+    const index = Number(event.currentTarget.getAttribute("data-option-index"));
+    if (itemHighlight.highlightedIndexRef.current !== index) {
+      itemHighlight.setHighlightedIndex({
+        event,
+        index,
+        reason: "mouse",
+      });
+    }
   };
 
   const handleKeyDown =
@@ -244,7 +312,7 @@ const useStatefulAutocomplete = <
       // onClick,
     }),
     getInputProps: () => ({
-      // id,
+      id,
       // value,
       // onBlur,
       // onFocus,
@@ -255,7 +323,7 @@ const useStatefulAutocomplete = <
       // "aria-controls": listboxAvailable ? `${id}-listbox` : undefined,
       // "aria-expanded": listboxAvailable,
       // autoComplete: 'off',
-      // ref: inputRef,
+      ref: inputRef,
       // autoCapitalize: 'none',
       // spellCheck: 'false',
       // role: 'combobox',
@@ -290,7 +358,7 @@ const useStatefulAutocomplete = <
       option,
     }: {
       index: number;
-      option: { data: TOptionData; stateChange?: TState };
+      option: Option<TOptionData, TState>;
     }) => {
       const selected = [value].some(
         (value2) =>
@@ -308,8 +376,8 @@ const useStatefulAutocomplete = <
             listItemsRef.current[index] = el;
           }
         },
-        // onMouseOver: handleOptionMouseOver,
-        // onClick: handleOptionClick,
+        onMouseOver: handleOptionMouseMove,
+        onClick: handleOptionClick(option),
         // onTouchStart: handleOptionTouchStart,
         "data-option-index": index,
         "aria-disabled": disabled,
