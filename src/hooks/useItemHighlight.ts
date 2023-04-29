@@ -11,21 +11,10 @@ const CLASSNAMES = {
   },
 };
 
-const useItemHighlight = <TOptionData, TState extends string>({
-  //TODO: expose autohighlight
-  // autoHighlight = true,
-  includeInputInList,
-  // disableListWrap,
-  // autocomplete,
-  inputRef,
-  id,
-  onHighlightChange,
-  // inputValue,
-  // popupOpen,
-  filteredOptions,
-  listboxRef,
-  listItemsRef,
-}: // disabledItemsFocusable,
+const useItemHighlight = <
+  TOptionData,
+  TState extends string
+>(props: // disabledItemsFocusable,
 // getOptionLabel,
 {
   id: string;
@@ -40,7 +29,7 @@ const useItemHighlight = <TOptionData, TState extends string>({
   // getOptionLabel: (option: string) => string;
   // inputValue: any;
   inputRef: React.RefObject<HTMLInputElement>;
-  // defaultHighlighted: 0 | -1;
+  defaultHighlighted: 0 | -1;
   // autocomplete: boolean;
   // disableListWrap: boolean;
   onHighlightChange?: (
@@ -52,8 +41,7 @@ const useItemHighlight = <TOptionData, TState extends string>({
 }) => {
   const disabledItemsFocusable = false;
   const disableListWrap = false;
-  const defaultHighlighted = /*autoHighlight ? 0 : -1*/ 0;
-  const highlightedIndexRef = useRef<number>(defaultHighlighted);
+  const highlightedIndexRef = useRef<number>(props.defaultHighlighted);
   const popupOpen = true;
 
   const setHighlightedIndex = useEventCallback(
@@ -61,30 +49,30 @@ const useItemHighlight = <TOptionData, TState extends string>({
       highlightedIndexRef.current = index;
 
       // does the index exist?
-      if (inputRef.current) {
+      if (props.inputRef.current) {
         if (index === -1) {
-          inputRef.current.removeAttribute("aria-activedescendant");
+          props.inputRef.current.removeAttribute("aria-activedescendant");
         } else {
-          inputRef.current.setAttribute(
+          props.inputRef.current.setAttribute(
             "aria-activedescendant",
-            `${id}-option-${index}`
+            `${props.id}-option-${index}`
           );
         }
       }
 
-      if (onHighlightChange) {
-        onHighlightChange(
+      if (props.onHighlightChange) {
+        props.onHighlightChange(
           event,
-          index === -1 ? null : filteredOptions[index],
+          index === -1 ? null : props.filteredOptions[index],
           reason
         );
       }
 
-      if (!listboxRef.current) {
+      if (!props.listboxRef.current) {
         return;
       }
 
-      const prev = listboxRef.current.querySelector(
+      const prev = props.listboxRef.current.querySelector(
         `[role="option"].${CLASSNAMES.option.focused}`
       );
       if (prev) {
@@ -92,7 +80,7 @@ const useItemHighlight = <TOptionData, TState extends string>({
         prev.classList.remove(CLASSNAMES.option.focusVisible);
       }
 
-      const listboxNode = listboxRef.current;
+      const listboxNode = props.listboxRef.current;
 
       // "No results"
       if (!listboxNode) {
@@ -104,7 +92,7 @@ const useItemHighlight = <TOptionData, TState extends string>({
         return;
       }
 
-      const option = listboxRef.current.querySelector(
+      const option = props.listboxRef.current.querySelector(
         `[data-option-index="${index}"]`
       );
 
@@ -124,7 +112,7 @@ const useItemHighlight = <TOptionData, TState extends string>({
   );
 
   function validOptionIndex(index: number, direction: "next" | "previous") {
-    if (!listboxRef.current || index === -1) {
+    if (!props.listboxRef.current || index === -1) {
       return -1;
     }
 
@@ -133,14 +121,14 @@ const useItemHighlight = <TOptionData, TState extends string>({
     while (true) {
       // Out of range
       if (
-        (direction === "next" && nextFocus === filteredOptions.length) ||
+        (direction === "next" && nextFocus === props.filteredOptions.length) ||
         (direction === "previous" && nextFocus === -1)
       ) {
         return -1;
       }
 
       // TODO: can improve logic here?
-      const option = listboxRef.current.querySelector(
+      const option = props.listboxRef.current.querySelector(
         `[data-option-index="${nextFocus}"]`
       ) as HTMLButtonElement;
 
@@ -177,11 +165,11 @@ const useItemHighlight = <TOptionData, TState extends string>({
       }
 
       const getNextIndex = () => {
-        const maxIndex = filteredOptions.length - 1;
+        const maxIndex = props.filteredOptions.length - 1;
 
-        console.log("OPT", filteredOptions, diff);
+        console.log("OPT", props.filteredOptions, diff);
         if (diff === "reset") {
-          return defaultHighlighted;
+          return props.defaultHighlighted;
         }
 
         if (diff === "start") {
@@ -196,7 +184,7 @@ const useItemHighlight = <TOptionData, TState extends string>({
 
         console.log("NEW", newIndex);
         if (newIndex < 0) {
-          if (newIndex === -1 && includeInputInList) {
+          if (newIndex === -1 && props.includeInputInList) {
             return -1;
           }
 
@@ -211,7 +199,7 @@ const useItemHighlight = <TOptionData, TState extends string>({
         }
 
         if (newIndex > maxIndex) {
-          if (newIndex === maxIndex + 1 && includeInputInList) {
+          if (newIndex === maxIndex + 1 && props.includeInputInList) {
             return -1;
           }
 
@@ -228,7 +216,7 @@ const useItemHighlight = <TOptionData, TState extends string>({
       const nextIndex = validOptionIndex(getNextIndex(), direction);
       console.log("NEXT", nextIndex);
       // add list items focused classes
-      const listItems = listItemsRef.current;
+      const listItems = props.listItemsRef.current;
       // TODO: set styles on highlight ref
       if (listItems) {
         if (highlightedIndexRef.current !== -1) {
@@ -247,16 +235,16 @@ const useItemHighlight = <TOptionData, TState extends string>({
       // Sync the content of the input with the highlighted option.
       // if (autocomplete && diff !== "reset") {
       //   if (nextIndex === -1) {
-      //     inputRef.current.value = inputValue;
+      //     props.inputRef.current.value = inputValue;
       //   } else {
-      //     const option = getOptionLabel(filteredOptions[nextIndex]);
-      //     inputRef.current.value = option;
+      //     const option = getOptionLabel(props.filteredOptions[nextIndex]);
+      //     props.inputRef.current.value = option;
       //
       //     // The portion of the selected suggestion that has not been typed by the user,
       //     // a completion string, appears inline after the input cursor in the textbox.
       //     const index = option.toLowerCase().indexOf(inputValue.toLowerCase());
       //     if (index === 0 && inputValue.length > 0) {
-      //       inputRef.current.setSelectionRange(
+      //       props.inputRef.current.setSelectionRange(
       //         inputValue.length,
       //         option.length
       //       );

@@ -1,15 +1,13 @@
 import React, { useId } from "react";
 import useItemHighlight from "./hooks/useItemHighlight";
-import { Simulate } from "react-dom/test-utils";
-import input = Simulate.input;
 import useAutocompleteState from "./hooks/useAutocompleteState";
 import usePopupState from "./hooks/usePopupState";
 import useAutocompleteOptions from "./hooks/useAutocompleteOptions";
 import useKeydown from "./hooks/useKeydown";
 import useInputProps from "./hooks/props/useInputProps";
 import useOptionsProps from "./hooks/props/useOptionsProps";
+import useRootProps from "./hooks/props/useRootProps";
 // TODO: configurable?
-// Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
 
 export type Option<TOptionData, TState extends string> = {
   data: TOptionData;
@@ -23,34 +21,30 @@ export type Option<TOptionData, TState extends string> = {
   }) => any;
 };
 
-const useStatefulAutocomplete = <
-  TOptionData,
-  TMultiple extends boolean,
-  TState extends string,
-  // do you need?
-  TValue
->({
+const useStatefulAutocomplete = <TOptionData, TState extends string, TValue>({
+  onOpen,
+  disabled: disabledProp,
   autoComplete,
   id: idProp,
   defaultValue,
   // TODO: types for props
   onHighlightChange,
-  multiple = false,
-  freeSolo = false,
-  selectOnFocus = !freeSolo,
+  selectOnFocus = true,
   isOptionEqualToValue = (option, value) => option === value,
   options,
   onChange,
   value: valueProp,
-  onOptionsStateChange,
   inputValue: inputValueProp,
   onInputChange,
-  open = false,
+  open,
   disableClearable = false,
   componentName = "Autocomplete",
+  onClose,
 }: {
+  onOpen?: () => void;
+  disabled?: boolean;
   autoComplete?: boolean;
-  onInputChange: (
+  onInputChange?: (
     event: React.SyntheticEvent,
     value: string,
     reason: string
@@ -61,19 +55,11 @@ const useStatefulAutocomplete = <
     option: Option<TOptionData, TState> | null,
     reason: any
   ) => void;
-  id: string;
-  isOptionEqualToValue: (option: TOptionData, value: TOptionData) => boolean;
-  defaultValue: Option<TOptionData, TState> | null;
-  multiple?: TMultiple;
-  freeSolo?: boolean;
+  id?: string;
+  isOptionEqualToValue?: (option: TOptionData, value: TOptionData) => boolean;
+  defaultValue?: Option<TOptionData, TState> | null;
   // TODO: generics
   options: Record<TState, Option<TOptionData, TState>[]>;
-  onOptionsStateChange?: (
-    event: any,
-    value: any,
-    reason: any,
-    details: any
-  ) => void;
   onChange?: (
     event: any,
     value: Option<TOptionData, TState> | null,
@@ -83,26 +69,57 @@ const useStatefulAutocomplete = <
       option: Option<TOptionData, TState>;
     }
   ) => void;
-  value: Option<TOptionData, TState> | null;
+  value?: Option<TOptionData, TState> | null;
   inputValue?: string;
   open?: boolean;
   disableClearable?: boolean;
   componentName?: string;
+  onClose?: (event: any, reason: any) => void;
 }) => {
   const generatedId = useId();
   const id = idProp ?? generatedId;
   const states = Object.keys(options) as (keyof typeof options)[];
-  const autocompleteOptions = useAutocompleteOptions({
-    options,
-  });
 
-  const popupState = usePopupState({ open, componentName });
   const autocompleteState = useAutocompleteState({
     valueProp,
     defaultValue,
     componentName,
   });
-  const listboxAvailable = open && autocompleteOptions.activeOptions.length > 0;
+  const rootProps = useRootProps({
+    id,
+    inputRef: autocompleteState.inputRef,
+    firstFocus: autocompleteState.firstFocus,
+    selectOnFocus,
+  });
+
+  const popupState = usePopupState({
+    open,
+    componentName,
+    setInputPristine: autocompleteState.setInputPristine,
+    onOpen,
+    onClose,
+  });
+
+  const inputProps = useInputProps({
+    setFocused: autocompleteState.setFocused,
+    firstFocus: autocompleteState.firstFocus,
+    ignoreFocus: autocompleteState.ignoreFocus,
+    inputValue: inputValueProp,
+    componentName,
+    onInputChange,
+    disableClearable,
+    popupOpen: popupState.open,
+    handleClose: popupState.handleClose,
+    handleOpen: popupState.handleOpen,
+    inputPristine: autocompleteState.inputPristine,
+    setInputPristine: autocompleteState.setInputPristine,
+  });
+
+  const autocompleteOptions = useAutocompleteOptions({
+    options,
+    popupOpen: popupState.open,
+  });
+
   const itemHighlight = useItemHighlight({
     id,
     onHighlightChange,
@@ -111,17 +128,11 @@ const useStatefulAutocomplete = <
     filteredOptions: autocompleteOptions.activeOptions,
     listboxRef: autocompleteState.listboxRef,
     listItemsRef: autocompleteState.listItemsRef,
+    defaultHighlighted: -1,
   });
 
-  const handleInputProps = useInputProps({
-    firstFocus: autocompleteState.firstFocus,
-    ignoreFocus: autocompleteState.ignoreFocus,
-    inputValue: inputValueProp,
-    componentName,
-    onInputChange,
-    disableClearable,
-    multiple,
-  });
+  const listboxAvailable =
+    popupState.open && autocompleteOptions.activeOptions.length > 0;
 
   const handleValue = (
     event: React.FormEvent<Element>,
@@ -130,29 +141,16 @@ const useStatefulAutocomplete = <
     details?: {
       origin: string;
       option: Option<TOptionData, TState>;
-      onSelectHandlerValue: any;
+      context: unknown;
     }
   ) => {
-    // if (multiple) {
-    //   if (
-    //     valueSta.length === newValue.length &&
-    //     value.every((val, i) => val === newValue[i])
-    //   ) {
-    //     return;
-    //   }
-    // } else if (value === newValue) {
-    //   return;
-    // }
-
     // runs if onChange provided
     if (onChange) {
       onChange(event, newValue, reason, details);
     }
 
     // only runs if uncontrolled
-    if (typeof autocompleteState.setValueState === "function") {
-      autocompleteState.setValueState(newValue);
-    }
+    autocompleteState.setValueState(newValue);
   };
 
   const selectNewValue = (
@@ -163,7 +161,6 @@ const useStatefulAutocomplete = <
   ) => {
     // TODO: handle multiple
     // TODO:  Reset Input
-
     // different onSelect side effects that can be run for different options
     let onSelectHandlerValue;
     if (option.onSelect) {
@@ -188,7 +185,7 @@ const useStatefulAutocomplete = <
     handleValue(event, option, reasonProp, {
       origin,
       option,
-      onSelectHandlerValue,
+      context: onSelectHandlerValue,
     });
   };
 
@@ -200,10 +197,13 @@ const useStatefulAutocomplete = <
   });
 
   const keydown = useKeydown({
+    popupOpen: popupState.open,
     activeOptions: autocompleteOptions.activeOptions,
     highlightedIndexRef: itemHighlight.highlightedIndexRef,
     changeHighlightedIndex: itemHighlight.changeHighlightedIndex,
     selectNewValue,
+    handleOpenPopup: popupState.handleOpen,
+    handleClosePopup: popupState.handleClose,
   });
 
   return {
@@ -221,41 +221,18 @@ const useStatefulAutocomplete = <
       "aria-owns": undefined,
       ...others,
       onKeyDown: keydown.handleKeyDown(others),
-      onMouseDown: (event: React.MouseEvent<Element>) => {
-        const target = event.target as HTMLElement;
-        if (target.getAttribute("id") !== id) {
-          event.preventDefault();
-        }
-      },
-      onClick: () => {
-        if (autocompleteState.inputRef.current) {
-          autocompleteState.inputRef.current.focus();
-        }
-        if (
-          autocompleteState.inputRef.current &&
-          autocompleteState.inputRef.current.selectionEnd &&
-          autocompleteState.inputRef.current.selectionStart &&
-          selectOnFocus &&
-          autocompleteState.firstFocus.current &&
-          autocompleteState.inputRef.current.selectionEnd -
-            autocompleteState.inputRef.current.selectionStart ===
-            0
-        ) {
-          autocompleteState.inputRef.current.select();
-        }
-
-        autocompleteState.firstFocus.current = false;
-      },
+      onMouseDown: rootProps.onMouseDown,
+      onClick: rootProps.handleOnClick,
     }),
     getInputProps: () => ({
       id,
-      value: handleInputProps.inputValue,
-      onBlur: handleInputProps.handleBlur,
-      // onFocus,
-      onChange: handleInputProps.handleInputChange,
-      // onMouseDown,
-      "aria-activedescendant": popupState.open ? "" : null,
-      "aria-autocomplete": autoComplete ? "both" : "list",
+      value: inputProps.inputValue,
+      onBlur: inputProps.handleBlur,
+      onFocus: inputProps.handleFocus,
+      onChange: inputProps.handleInputChange,
+      onMouseDown: inputProps.handleInputMouseDown,
+      "aria-activedescendant": popupState.open ? "" : undefined,
+      "aria-autocomplete": autoComplete ? ("both" as const) : ("list" as const),
       "aria-controls": listboxAvailable ? `${id}-listbox` : undefined,
       "aria-expanded": listboxAvailable,
       autoComplete: "off",
@@ -263,12 +240,12 @@ const useStatefulAutocomplete = <
       autoCapitalize: "none" as const,
       spellCheck: "false" as const,
       role: "combobox" as const,
-      // disabled: disabledProp,
+      disabled: disabledProp,
     }),
     getListboxProps: () => ({
       role: "listbox",
-      id: `listbox`,
-      "aria-labelledby": `label`,
+      id: `${id}-listbox`,
+      "aria-labelledby": `${id}-label`,
       ref: autocompleteState.listboxRef,
       onMouseDown: (event: React.MouseEvent<HTMLUListElement>) => {
         // Prevent blur
@@ -287,12 +264,11 @@ const useStatefulAutocomplete = <
           value2 != null && isOptionEqualToValue(option.data, value2.data)
       );
       const disabled = false;
-
       return {
         key: `${option}-${index}`,
         tabIndex: -1,
         role: "option",
-        id: `-option-${index}`,
+        id: `${id}-option-${index}`,
         ref: (el: HTMLLIElement) => {
           if (el) {
             autocompleteState.listItemsRef.current[index] = el;
@@ -307,14 +283,13 @@ const useStatefulAutocomplete = <
       };
     },
     id,
-    inputValue: handleInputProps.inputValue,
+    inputValue: inputProps.inputValue,
     value: autocompleteState.value,
-    // dirty,
+    dirty: autocompleteState.value !== null,
     popupOpen: popupState.open,
-    // focused,
-    // anchorEl,
-    // setAnchorEl,
-    // focusedTag,
+    focused: autocompleteState.focused,
+    anchorEl: popupState.anchorEl,
+    setAnchorEl: popupState.setAnchorEl,
   };
 };
 

@@ -1,17 +1,22 @@
 import React, { MutableRefObject, RefObject } from "react";
 import useControlled from "../useControlled";
+import { Simulate } from "react-dom/test-utils";
+import input = Simulate.input;
 const useInputProps = (props: {
+  popupOpen: boolean;
+  handleClose: (event: any, reason: any) => void;
+  setFocused: React.Dispatch<React.SetStateAction<boolean>>;
+  inputPristine: boolean;
+  setInputPristine: React.Dispatch<React.SetStateAction<boolean>>;
+  handleOpen: (event: any) => void;
   ignoreFocus: MutableRefObject<boolean>;
   firstFocus: MutableRefObject<boolean>;
   inputValue: string | undefined;
   componentName: string;
-  onInputChange: (
-    event: React.SyntheticEvent,
-    value: string,
-    reason: string
-  ) => void | undefined;
+  onInputChange:
+    | ((event: React.SyntheticEvent, value: string, reason: string) => void)
+    | undefined;
   disableClearable: boolean;
-  multiple: boolean;
 }) => {
   const [inputValue, setInputValueState] = useControlled({
     controlled: props.inputValue,
@@ -19,18 +24,22 @@ const useInputProps = (props: {
     name: props.componentName,
     state: "inputValue",
   });
-  const [inputPristine, setInputPristine] = React.useState(true);
-  const [focused, setFocused] = React.useState(false);
+
+  const handleInputMouseDown = (event: any) => {
+    if (inputValue === "" || !props.popupOpen) {
+      props.handleOpen(event);
+    }
+  };
 
   const handleBlur = (
     event: React.FormEvent<HTMLTextAreaElement | HTMLInputElement>
   ) => {
     // Ignore the event when using the scrollbar with IE11
 
-    setFocused(false);
-
+    props.setFocused(false);
     props.firstFocus.current = true;
     props.ignoreFocus.current = false;
+    props.handleClose(event, "blur");
     //
     // if (autoSelect && highlightedIndexRef.current !== -1 && popupOpen) {
     //   selectNewValue(
@@ -54,10 +63,9 @@ const useInputProps = (props: {
     const newValue = target.value;
 
     if (inputValue !== newValue) {
-      if (typeof setInputValueState === "function") {
-        setInputValueState(newValue);
-      }
-      setInputPristine(false);
+      setInputValueState(newValue);
+
+      props.setInputPristine(false);
 
       if (props.onInputChange) {
         props.onInputChange(event, newValue, "input");
@@ -65,32 +73,24 @@ const useInputProps = (props: {
     }
 
     if (newValue === "") {
-      if (!props.disableClearable && !props.multiple) {
-        // TODO: handle open
-        // handleValue(event, null, "clear");
-      }
-    } else {
-      // TODO: handle open
-      // handleOpen(event);
     }
+    // TODO: handle open
+    props.handleOpen(event);
   };
 
   const handleFocus = (
     event: React.FormEvent<HTMLTextAreaElement | HTMLInputElement>
   ) => {
-    setFocused(true);
-
-    // if (openOnFocus && !ignoreFocus.current) {
-    //   handleOpen(event);
-    // }
+    props.setFocused(true);
+    props.handleOpen(event);
   };
 
   return {
+    handleInputMouseDown,
     handleFocus,
     handleBlur,
     handleInputChange,
     inputValue,
-    inputPristine,
   };
 };
 

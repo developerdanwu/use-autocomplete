@@ -1,9 +1,13 @@
 import React from "react";
 import { Option } from "../main";
 
+// Number of options to jump in list box when `Page Up` and `Page Down` keys are used.
 const pageSize = 5;
 
 const useKeydown = <TOptionData, TState extends string>(props: {
+  popupOpen: boolean;
+  handleClosePopup: (event: any, reason: any) => void;
+  handleOpenPopup: (event: any) => void;
   activeOptions: Record<TState, Option<TOptionData, TState>[]>[TState];
   highlightedIndexRef: React.MutableRefObject<number>;
   changeHighlightedIndex: (args_0: {
@@ -31,6 +35,7 @@ const useKeydown = <TOptionData, TState extends string>(props: {
         case "PageUp": {
           // Prevent scroll of the page
           event.preventDefault();
+          props.handleOpenPopup(event);
           props.changeHighlightedIndex({
             diff: -pageSize,
             direction: "previous",
@@ -42,23 +47,31 @@ const useKeydown = <TOptionData, TState extends string>(props: {
         case "PageDown": {
           // Prevent scroll of the page
           event.preventDefault();
-          props.changeHighlightedIndex({
-            diff: pageSize,
-            direction: "next",
-            reason: "keyboard",
-            event,
-          });
+          if (props.popupOpen) {
+            props.changeHighlightedIndex({
+              diff: pageSize,
+              direction: "next",
+              reason: "keyboard",
+              event,
+            });
+          } else {
+            props.handleOpenPopup(event);
+          }
+
           break;
         }
         case "ArrowDown":
-          props.changeHighlightedIndex({
-            diff: 1,
-            direction: "next",
-            reason: "keyboard",
-            event,
-          });
-          // TODO: handle opening of popper
-          console.log("ARROW DOWN");
+          if (props.popupOpen) {
+            props.changeHighlightedIndex({
+              diff: 1,
+              direction: "next",
+              reason: "keyboard",
+              event,
+            });
+          } else {
+            props.handleOpenPopup(event);
+          }
+
           break;
         case "ArrowUp": {
           // Prevent cursor move
@@ -92,21 +105,44 @@ const useKeydown = <TOptionData, TState extends string>(props: {
         case "Home": {
           // Prevent scroll of the page
           event.preventDefault();
-          props.changeHighlightedIndex({
-            diff: "start",
-            direction: "next",
-            reason: "keyboard",
-            event,
-          });
+          if (props.popupOpen) {
+            props.changeHighlightedIndex({
+              diff: "start",
+              direction: "next",
+              reason: "keyboard",
+              event,
+            });
+          }
+
           break;
         }
         case "End": {
           // Prevent scroll of the page
           event.preventDefault();
+          if (props.popupOpen) {
+            props.changeHighlightedIndex({
+              diff: "end",
+              direction: "next",
+              reason: "keyboard",
+              event,
+            });
+          } else {
+            props.handleOpenPopup(event);
+            props.changeHighlightedIndex({
+              diff: "reset",
+              direction: "next",
+              reason: "keyboard",
+              event,
+            });
+          }
+        }
+        case "Escape": {
+          event.preventDefault();
+          props.handleClosePopup(event, "escape");
           props.changeHighlightedIndex({
-            diff: "end",
+            diff: "reset",
             direction: "next",
-            reason: "keyboard",
+            reason: "escape",
             event,
           });
         }

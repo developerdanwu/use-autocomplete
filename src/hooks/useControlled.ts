@@ -17,6 +17,7 @@ export default function useControlled<TValue>({
   const [valueState, setValue] = React.useState<TValue>(defaultProp);
   const value = isControlled ? controlled : valueState;
 
+  console.log(state, isControlled);
   if (process.env.NODE_ENV !== "production") {
     React.useEffect(() => {
       if (isControlled !== (controlled !== undefined)) {
@@ -57,5 +58,5 @@ export default function useControlled<TValue>({
     }
   }, []);
 
-  return [value, setValueIfUncontrolled];
+  return [value, setValueIfUncontrolled] as const;
 }
