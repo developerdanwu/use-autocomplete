@@ -4,9 +4,12 @@ import useAutocompleteState from "./hooks/useAutocompleteState";
 import usePopupState from "./hooks/usePopupState";
 import useAutocompleteOptions from "./hooks/useAutocompleteOptions";
 import useKeydown from "./hooks/useKeydown";
-import useInputProps from "./hooks/props/useInputProps";
-import useOptionsProps from "./hooks/props/useOptionsProps";
-import useRootProps from "./hooks/props/useRootProps";
+import {
+  getInputProps,
+  getOptionsProps,
+  getRootProps,
+  getSelectNewValueFn,
+} from "./hooks/utils";
 // TODO: configurable?
 
 export type Option<TOptionData, TState extends string> = {
@@ -80,46 +83,30 @@ const useStatefulAutocomplete = <TOptionData, TState extends string, TValue>({
   const id = idProp ?? generatedId;
   const states = Object.keys(options) as (keyof typeof options)[];
 
+  // autocomplete state (focused etc.)
   const autocompleteState = useAutocompleteState({
+    inputValue: inputValueProp,
     valueProp,
     defaultValue,
     componentName,
   });
-  const rootProps = useRootProps({
-    id,
-    inputRef: autocompleteState.inputRef,
-    firstFocus: autocompleteState.firstFocus,
-    selectOnFocus,
-  });
 
+  // handles the popper state
   const popupState = usePopupState({
-    open,
     componentName,
+    open,
     setInputPristine: autocompleteState.setInputPristine,
     onOpen,
     onClose,
   });
 
-  const inputProps = useInputProps({
-    setFocused: autocompleteState.setFocused,
-    firstFocus: autocompleteState.firstFocus,
-    ignoreFocus: autocompleteState.ignoreFocus,
-    inputValue: inputValueProp,
-    componentName,
-    onInputChange,
-    disableClearable,
-    popupOpen: popupState.open,
-    handleClose: popupState.handleClose,
-    handleOpen: popupState.handleOpen,
-    inputPristine: autocompleteState.inputPristine,
-    setInputPristine: autocompleteState.setInputPristine,
-  });
-
+  // handles the options for autocomplete
   const autocompleteOptions = useAutocompleteOptions({
     options,
     popupOpen: popupState.open,
   });
 
+  // handles item highlighting
   const itemHighlight = useItemHighlight({
     id,
     onHighlightChange,
@@ -131,6 +118,7 @@ const useStatefulAutocomplete = <TOptionData, TState extends string, TValue>({
     defaultHighlighted: -1,
   });
 
+  // handles input props
   const listboxAvailable =
     popupState.open && autocompleteOptions.activeOptions.length > 0;
 
@@ -152,48 +140,10 @@ const useStatefulAutocomplete = <TOptionData, TState extends string, TValue>({
     // only runs if uncontrolled
     autocompleteState.setValueState(newValue);
   };
-
-  const selectNewValue = (
-    event: React.UIEvent<Element, UIEvent>,
-    option: (typeof options)[keyof typeof options][number],
-    reasonProp = "selectOption",
-    origin = "options"
-  ) => {
-    // TODO: handle multiple
-    // TODO:  Reset Input
-    // different onSelect side effects that can be run for different options
-    let onSelectHandlerValue;
-    if (option.onSelect) {
-      onSelectHandlerValue = option.onSelect({
-        option,
-        setOptionsState: autocompleteOptions.setOptionsState,
-        resetHighlightIndex: () => {
-          itemHighlight.changeHighlightedIndex({
-            diff: "start",
-            direction: "previous",
-            reason: "keyboard",
-            event,
-          });
-        },
-      });
-
-      // if undefined is returned then don't run handleValue
-      if (onSelectHandlerValue === undefined) {
-        return;
-      }
-    }
-    handleValue(event, option, reasonProp, {
-      origin,
-      option,
-      context: onSelectHandlerValue,
-    });
-  };
-
-  const optionsProps = useOptionsProps({
-    highlightedIndexRef: itemHighlight.highlightedIndexRef,
-    setHighlightedIndex: itemHighlight.setHighlightedIndex,
-    isTouchRef: autocompleteState.isTouch,
-    selectNewValue,
+  const selectNewValue = getSelectNewValueFn({
+    setOptionsState: autocompleteOptions.setOptionsState,
+    changeHighlightedIndex: itemHighlight.changeHighlightedIndex,
+    handleValue,
   });
 
   const keydown = useKeydown({
@@ -221,16 +171,16 @@ const useStatefulAutocomplete = <TOptionData, TState extends string, TValue>({
       "aria-owns": undefined,
       ...others,
       onKeyDown: keydown.handleKeyDown(others),
-      onMouseDown: rootProps.onMouseDown,
-      onClick: rootProps.handleOnClick,
+      ...getRootProps({
+        id,
+        inputRef: autocompleteState.inputRef,
+        firstFocus: autocompleteState.firstFocus,
+        selectOnFocus,
+      }),
     }),
     getInputProps: () => ({
       id,
-      value: inputProps.inputValue,
-      onBlur: inputProps.handleBlur,
-      onFocus: inputProps.handleFocus,
-      onChange: inputProps.handleInputChange,
-      onMouseDown: inputProps.handleInputMouseDown,
+      value: autocompleteState.inputValue,
       "aria-activedescendant": popupState.open ? "" : undefined,
       "aria-autocomplete": autoComplete ? ("both" as const) : ("list" as const),
       "aria-controls": listboxAvailable ? `${id}-listbox` : undefined,
@@ -241,6 +191,21 @@ const useStatefulAutocomplete = <TOptionData, TState extends string, TValue>({
       spellCheck: "false" as const,
       role: "combobox" as const,
       disabled: disabledProp,
+      ...getInputProps({
+        setFocused: autocompleteState.setFocused,
+        firstFocus: autocompleteState.firstFocus,
+        ignoreFocus: autocompleteState.ignoreFocus,
+        inputValue: autocompleteState.inputValue,
+        setInputValueState: autocompleteState.setInputValueState,
+        componentName,
+        onInputChange,
+        disableClearable,
+        popupOpen: popupState.open,
+        handleClose: popupState.handleClose,
+        handleOpen: popupState.handleOpen,
+        inputPristine: autocompleteState.inputPristine,
+        setInputPristine: autocompleteState.setInputPristine,
+      }),
     }),
     getListboxProps: () => ({
       role: "listbox",
@@ -274,16 +239,20 @@ const useStatefulAutocomplete = <TOptionData, TState extends string, TValue>({
             autocompleteState.listItemsRef.current[index] = el;
           }
         },
-        onMouseOver: optionsProps.handleOptionMouseMove,
-        onClick: optionsProps.handleOptionClick(option),
-        onTouchStart: optionsProps.handleOptionTouchStart,
         "data-option-index": index,
         "aria-disabled": disabled,
         "aria-selected": selected,
+        ...getOptionsProps({
+          highlightedIndexRef: itemHighlight.highlightedIndexRef,
+          setHighlightedIndex: itemHighlight.setHighlightedIndex,
+          isTouchRef: autocompleteState.isTouch,
+          selectNewValue,
+          option,
+        }),
       };
     },
     id,
-    inputValue: inputProps.inputValue,
+    inputValue: autocompleteState.inputValue,
     value: autocompleteState.value,
     dirty: autocompleteState.value !== null,
     popupOpen: popupState.open,

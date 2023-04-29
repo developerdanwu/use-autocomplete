@@ -3,10 +3,17 @@ import useControlled from "./useControlled";
 import { Option } from "../main";
 
 const useAutocompleteState = <TOptionData, TState extends string>(props: {
+  inputValue: string | undefined;
   valueProp: Option<TOptionData, TState> | null | undefined;
   defaultValue: Option<TOptionData, TState> | null | undefined;
   componentName: string;
 }) => {
+  const [inputValue, setInputValueState] = useControlled({
+    controlled: props.inputValue,
+    default: "",
+    name: props.componentName,
+    state: "inputValue",
+  });
   const [inputPristine, setInputPristine] = React.useState(true);
   const [focused, setFocused] = useState(false);
   const firstFocus = useRef(true);
@@ -22,6 +29,8 @@ const useAutocompleteState = <TOptionData, TState extends string>(props: {
   });
 
   return {
+    inputValue,
+    setInputValueState,
     inputPristine,
     setInputPristine,
     focused,

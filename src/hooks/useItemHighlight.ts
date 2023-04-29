@@ -1,4 +1,4 @@
-import useEventCallback from "./utils";
+import { useEventCallback } from "./utils";
 import React, { useRef, useState } from "react";
 import { Option } from "../main";
 
